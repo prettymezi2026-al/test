@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "name": "10-making-math-game",
+  "cleanUrls": true,
+  "routes": [
+    { "src": "/(.*)", "dest": "/$1" }
+  ]
+}

@@ -1,271 +1,551 @@
 /**
- * 초등학교 6학년 관용표현 학습 퀴즈 - 애플리케이션 메인 로직 (즉시 문제별 해설 기능 포함)
+ * 「10 만들기 탐험대」 메인 애플리케이션 및 Firebase / 게임 상태 컨트롤러
  */
 
+import { 
+  auth, 
+  db, 
+  isFirebaseConfigured, 
+  signInWithPopup, 
+  googleProvider, 
+  signInAnonymously, 
+  onAuthStateChanged, 
+  signOut,
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  orderBy,
+  limit,
+  doc,
+  setDoc,
+  getDoc,
+  serverTimestamp
+} from './firebaseConfig.js';
+
+import { MathEngine } from './gameLogic.js';
+
 document.addEventListener('DOMContentLoaded', () => {
-  // DOM Elements
-  const homeView = document.getElementById('home-view');
-  const quizView = document.getElementById('quiz-view');
-  const resultView = document.getElementById('result-view');
+  // Views
+  const lobbyView = document.getElementById('lobby-view');
+  const minigame1View = document.getElementById('minigame-1-view');
+  const minigame2View = document.getElementById('minigame-2-view');
+  const minigame3View = document.getElementById('minigame-3-view');
+  const bossView = document.getElementById('boss-view');
+  const leaderboardView = document.getElementById('leaderboard-view');
 
-  const startBtn = document.getElementById('start-btn');
-  const nextBtn = document.getElementById('next-btn');
-  const nextBtnText = document.getElementById('next-btn-text');
-  const restartBtn = document.getElementById('restart-btn');
+  // DOM Buttons & Badges
+  const goldCountEl = document.getElementById('gold-count');
+  const userDisplayNameEl = document.getElementById('user-display-name');
+  const userAvatarEl = document.getElementById('user-avatar');
 
-  const quizStepText = document.getElementById('quiz-step-text');
-  const progressFill = document.getElementById('progress-fill');
-  const questionText = document.getElementById('question-text');
-  const optionsContainer = document.getElementById('options-container');
+  const btnGoogleLogin = document.getElementById('btn-google-login');
+  const btnAnonLogin = document.getElementById('btn-anon-login');
+  const btnLogout = document.getElementById('btn-logout');
 
-  // Instant Feedback Elements
-  const feedbackBox = document.getElementById('feedback-box');
-  const feedbackHeader = document.getElementById('feedback-header');
-  const feedbackExp = document.getElementById('feedback-exp');
+  const cardGame1 = document.getElementById('card-game-1');
+  const cardGame2 = document.getElementById('card-game-2');
+  const cardGame3 = document.getElementById('card-game-3');
 
-  const finalScoreEl = document.getElementById('final-score');
-  const resultTitleEl = document.getElementById('result-title');
-  const resultSubtitleEl = document.getElementById('result-subtitle');
-  const reviewListEl = document.getElementById('review-list');
+  const bossCard = document.getElementById('boss-card');
+  const btnStartBoss = document.getElementById('btn-start-boss');
+  const bossLockDesc = document.getElementById('boss-lock-desc');
 
-  // Application State
-  let currentQuestionIndex = 0;
-  let userAnswers = []; // 각 문제별 사용자가 선택한 answerIndex
-  let isAnswered = false; // 현재 문제 답변 완료 여부
+  const btnOpenLeaderboard = document.getElementById('btn-open-leaderboard');
+  const btnBackButtons = document.querySelectorAll('.btn-back-lobby');
 
-  // Event Listeners
-  startBtn.addEventListener('click', startQuiz);
-  nextBtn.addEventListener('click', handleNextQuestion);
-  restartBtn.addEventListener('click', restartQuiz);
+  // Tabs for Leaderboard
+  const tabBossSpeed = document.getElementById('tab-boss-speed');
+  const tabGoldAccum = document.getElementById('tab-gold-accum');
+  const tabBossClear = document.getElementById('tab-boss-clear');
+  const rankListEl = document.getElementById('rank-list');
 
-  /**
-   * 1. 퀴즈 시작
-   */
-  function startQuiz() {
-    currentQuestionIndex = 0;
-    userAnswers = new Array(quizData.length).fill(-1);
+  // Game States
+  let currentUser = null;
+  let gold = parseInt(localStorage.getItem('vibe_gold') || '0', 10);
+  let bossClears = parseInt(localStorage.getItem('vibe_boss_clears') || '0', 10);
 
-    switchView(quizView);
-    renderQuestion();
+  // Update UI State
+  updateGoldUI();
+
+  // Auth Observers
+  if (isFirebaseConfigured && auth) {
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        currentUser = user;
+        userDisplayNameEl.textContent = user.displayName || (user.isAnonymous ? '익명 탐험가' : '탐험가');
+        userAvatarEl.textContent = user.isAnonymous ? '👤' : '👦';
+        btnGoogleLogin.style.display = 'none';
+        btnAnonLogin.style.display = 'none';
+        btnLogout.style.display = 'inline-block';
+        syncUserData(user.uid);
+      } else {
+        currentUser = null;
+        userDisplayNameEl.textContent = '익명 탐험가';
+        btnGoogleLogin.style.display = 'inline-block';
+        btnAnonLogin.style.display = 'inline-block';
+        btnLogout.style.display = 'none';
+      }
+    });
   }
 
-  /**
-   * 2. 화면 전환 헬퍼 함수
-   */
+  // Auth Event Listeners
+  btnGoogleLogin.addEventListener('click', async () => {
+    try {
+      if (isFirebaseConfigured) await signInWithPopup(auth, googleProvider);
+      else alert("Firebase 설정이 필요합니다. 익명 플레이로 진행합니다.");
+    } catch (e) {
+      console.error(e);
+      alert("로그인 중 오류가 발생했습니다.");
+    }
+  });
+
+  btnAnonLogin.addEventListener('click', async () => {
+    try {
+      if (isFirebaseConfigured) await signInAnonymously(auth);
+      else alert("익명 모드로 플레이합니다.");
+    } catch (e) {
+      console.error(e);
+    }
+  });
+
+  btnLogout.addEventListener('click', () => {
+    if (isFirebaseConfigured) signOut(auth);
+  });
+
+  // View Navigation
   function switchView(targetView) {
-    [homeView, quizView, resultView].forEach(view => {
-      view.classList.remove('active');
-    });
+    [lobbyView, minigame1View, minigame2View, minigame3View, bossView, leaderboardView].forEach(v => v.classList.remove('active'));
     targetView.classList.add('active');
   }
 
-  /**
-   * 3. 현재 문제 및 보기 렌더링
-   */
-  function renderQuestion() {
-    isAnswered = false;
-    const currentQ = quizData[currentQuestionIndex];
+  btnBackButtons.forEach(btn => {
+    btn.addEventListener('click', () => switchView(lobbyView));
+  });
 
-    // 헤더 프로그레스 바 및 텍스트 업데이트
-    const currentStep = currentQuestionIndex + 1;
-    const totalQuestions = quizData.length;
-    const progressPercent = (currentStep / totalQuestions) * 100;
+  // Gold & Boss Unlocking
+  function updateGoldUI() {
+    goldCountEl.textContent = gold;
+    localStorage.setItem('vibe_gold', gold.toString());
+    localStorage.setItem('vibe_boss_clears', bossClears.toString());
 
-    quizStepText.textContent = `문제 ${currentStep} / ${totalQuestions}`;
-    progressFill.style.width = `${progressPercent}%`;
+    if (gold >= 100) {
+      bossCard.className = 'boss-card unlocked';
+      bossLockDesc.textContent = '도전 준비 완료! (10문제 타임어택)';
+      btnStartBoss.disabled = false;
+    } else {
+      bossCard.className = 'boss-card locked';
+      bossLockDesc.textContent = `도전 조건: 100 Gold 필요 (현재 ${gold}/100 Gold)`;
+      btnStartBoss.disabled = true;
+    }
+  }
 
-    // 피드백 박스 비활성화
-    feedbackBox.className = 'feedback-box';
+  function addGold(amount) {
+    gold += amount;
+    updateGoldUI();
+    alert(`🎉 축하합니다! +${amount} Gold를 획득했습니다!`);
+  }
 
-    // 질문 텍스트 업데이트
-    questionText.textContent = currentQ.question;
+  // ----------------------------------------------------
+  // MINIGAME 1: BUBBLE POP
+  // ----------------------------------------------------
+  cardGame1.addEventListener('click', () => {
+    switchView(minigame1View);
+    startBubbleGame();
+  });
 
-    // 보기 옵션 리스트 렌더링
-    optionsContainer.innerHTML = '';
-    currentQ.options.forEach((optText, optIndex) => {
-      const optionBtn = document.createElement('button');
-      optionBtn.className = 'option-btn';
+  function startBubbleGame() {
+    const container = document.getElementById('bubble-container');
+    container.innerHTML = '';
 
-      optionBtn.innerHTML = `
-        <span class="option-num">${optIndex + 1}</span>
-        <span class="option-label">${optText}</span>
+    const numbers = [1, 9, 2, 8, 3, 7, 4, 6, 5, 5, 2, 8]; // Pairs sum to 10
+    numbers.sort(() => Math.random() - 0.5);
+
+    let selectedBubble = null;
+    let matchedPairs = 0;
+
+    numbers.forEach((num, idx) => {
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble-item';
+      bubble.textContent = num;
+
+      bubble.addEventListener('click', () => {
+        if (bubble.style.visibility === 'hidden') return;
+
+        if (!selectedBubble) {
+          selectedBubble = { el: bubble, val: num };
+          bubble.classList.add('selected');
+        } else {
+          if (selectedBubble.el === bubble) {
+            bubble.classList.remove('selected');
+            selectedBubble = null;
+            return;
+          }
+
+          if (selectedBubble.val + num === 10) {
+            // Success Match
+            bubble.style.visibility = 'hidden';
+            selectedBubble.el.style.visibility = 'hidden';
+            selectedBubble = null;
+            matchedPairs++;
+
+            if (matchedPairs === numbers.length / 2) {
+              setTimeout(() => {
+                addGold(20);
+                switchView(lobbyView);
+              }, 300);
+            }
+          } else {
+            // Fail
+            selectedBubble.el.classList.remove('selected');
+            selectedBubble = null;
+          }
+        }
+      });
+
+      container.appendChild(bubble);
+    });
+  }
+
+  // ----------------------------------------------------
+  // MINIGAME 2: SPEED QUIZ
+  // ----------------------------------------------------
+  let speedTimerInterval;
+  cardGame2.addEventListener('click', () => {
+    switchView(minigame2View);
+    startSpeedQuiz();
+  });
+
+  function startSpeedQuiz() {
+    const { a, b } = MathEngine.getRandomPair();
+    const qText = document.getElementById('speed-q-text');
+    const timerFill = document.getElementById('speed-timer-fill');
+    const optionsGrid = document.getElementById('speed-options-grid');
+
+    qText.textContent = `${a} + ? = 10`;
+    optionsGrid.innerHTML = '';
+    timerFill.style.width = '100%';
+
+    const options = MathEngine.generateOptions(b);
+    options.forEach(optVal => {
+      const btn = document.createElement('button');
+      btn.className = 'opt-btn-game';
+      btn.textContent = optVal;
+
+      btn.addEventListener('click', () => {
+        clearInterval(speedTimerInterval);
+        if (optVal === b) {
+          addGold(30);
+        } else {
+          alert("아쉽네요! 시간 초과 또는 오답입니다.");
+        }
+        switchView(lobbyView);
+      });
+      optionsGrid.appendChild(btn);
+    });
+
+    // 3 Second Countdown Timer
+    let startTime = Date.now();
+    const duration = 3000;
+    clearInterval(speedTimerInterval);
+
+    speedTimerInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const remainingPercent = Math.max(0, (1 - elapsed / duration) * 100);
+      timerFill.style.width = `${remainingPercent}%`;
+
+      if (elapsed >= duration) {
+        clearInterval(speedTimerInterval);
+        alert("시간 초과! 3초 안에 선택하지 못했습니다.");
+        switchView(lobbyView);
+      }
+    }, 50);
+  }
+
+  // ----------------------------------------------------
+  // MINIGAME 3: BLOCK ADDITION
+  // ----------------------------------------------------
+  cardGame3.addEventListener('click', () => {
+    switchView(minigame3View);
+    startBlockGame();
+  });
+
+  function startBlockGame() {
+    const board = document.getElementById('block-board');
+    board.innerHTML = '';
+
+    const blocks = [1, 2, 3, 4, 5, 5, 6, 7, 8, 9];
+    blocks.sort(() => Math.random() - 0.5);
+
+    let selectedBlocks = [];
+
+    blocks.forEach(val => {
+      const blockEl = document.createElement('div');
+      blockEl.className = 'block-num';
+      blockEl.textContent = val;
+
+      blockEl.addEventListener('click', () => {
+        if (blockEl.classList.contains('selected')) {
+          blockEl.classList.remove('selected');
+          selectedBlocks = selectedBlocks.filter(b => b.el !== blockEl);
+        } else {
+          blockEl.classList.add('selected');
+          selectedBlocks.push({ el: blockEl, val });
+        }
+
+        const currentSum = selectedBlocks.reduce((acc, curr) => acc + curr.val, 0);
+
+        if (currentSum === 10) {
+          selectedBlocks.forEach(b => b.el.style.visibility = 'hidden');
+          selectedBlocks = [];
+
+          const remaining = board.querySelectorAll('.block-num:not([style*="visibility: hidden"])');
+          if (remaining.length <= 2) {
+            setTimeout(() => {
+              addGold(30);
+              switchView(lobbyView);
+            }, 300);
+          }
+        } else if (currentSum > 10) {
+          alert(`합이 ${currentSum}이 되었습니다! (10을 초과함)`);
+          selectedBlocks.forEach(b => b.el.classList.remove('selected'));
+          selectedBlocks = [];
+        }
+      });
+
+      board.appendChild(blockEl);
+    });
+  }
+
+  // ----------------------------------------------------
+  // BOSS RAID (10 QUESTIONS TIME-ATTACK)
+  // ----------------------------------------------------
+  let bossQuestions = [];
+  let currentBossQIdx = 0;
+  let bossHp = 10;
+  let bossStartTime = 0;
+  let bossTimerInterval;
+  let bossCorrectAnswers = 0;
+
+  btnStartBoss.addEventListener('click', () => {
+    if (gold < 100) return;
+    gold -= 100; // Consume 100 gold
+    updateGoldUI();
+
+    switchView(bossView);
+    startBossRaid();
+  });
+
+  function startBossRaid() {
+    bossQuestions = MathEngine.generateBossQuestions();
+    currentBossQIdx = 0;
+    bossHp = 10;
+    bossCorrectAnswers = 0;
+    bossStartTime = performance.now();
+
+    updateBossHpUI();
+    renderBossQuestion();
+
+    // Timer Update
+    const timerTextEl = document.getElementById('boss-timer-text');
+    clearInterval(bossTimerInterval);
+    bossTimerInterval = setInterval(() => {
+      const elapsed = (performance.now() - bossStartTime) / 1000;
+      timerTextEl.textContent = `${elapsed.toFixed(2)}초`;
+    }, 30);
+  }
+
+  function updateBossHpUI() {
+    document.getElementById('boss-hp-text').textContent = `${bossHp} / 10`;
+    document.getElementById('boss-hp-fill').style.width = `${(bossHp / 10) * 100}%`;
+    document.getElementById('boss-progress-text').textContent = `${currentBossQIdx + 1} / 10`;
+  }
+
+  function renderBossQuestion() {
+    const q = bossQuestions[currentBossQIdx];
+    document.getElementById('boss-q-text').textContent = q.questionText;
+
+    const optionsGrid = document.getElementById('boss-options-grid');
+    optionsGrid.innerHTML = '';
+
+    q.options.forEach(optVal => {
+      const btn = document.createElement('button');
+      btn.className = 'opt-btn-game';
+      btn.textContent = optVal;
+
+      btn.addEventListener('click', () => {
+        if (optVal === q.answer) {
+          bossHp = Math.max(0, bossHp - 1);
+          bossCorrectAnswers++;
+        }
+
+        currentBossQIdx++;
+        updateBossHpUI();
+
+        if (currentBossQIdx < 10) {
+          renderBossQuestion();
+        } else {
+          // Boss Raid Complete
+          clearInterval(bossTimerInterval);
+          const totalTimeSec = parseFloat(((performance.now() - bossStartTime) / 1000).toFixed(2));
+          finishBossRaid(totalTimeSec);
+        }
+      });
+
+      optionsGrid.appendChild(btn);
+    });
+  }
+
+  async function finishBossRaid(timeSec) {
+    bossClears++;
+    localStorage.setItem('vibe_boss_clears', bossClears.toString());
+
+    alert(`⚔️ 보스 대결 종료!\n- 정답 수: ${bossCorrectAnswers} / 10개\n- 걸린 시간: ${timeSec}초`);
+
+    // Save record if 100% accuracy (10/10)
+    const playerName = userDisplayNameEl.textContent || '익명 탐험가';
+    if (bossCorrectAnswers === 10) {
+      alert(`🎉 100% 정답 명예의 전당 기록 등록 대상입니다! (${timeSec}초)`);
+      await saveLeaderboardRecord(playerName, timeSec, gold, bossClears);
+    } else {
+      alert(`💡 10문제를 모두 맞춰야 보스 최단시간 명예의 전당 10위에 들어갈 수 있습니다!`);
+    }
+
+    switchView(lobbyView);
+  }
+
+  // ----------------------------------------------------
+  // LEADERBOARD & FIRESTORE INTEGRATION
+  // ----------------------------------------------------
+  btnOpenLeaderboard.addEventListener('click', () => {
+    switchView(leaderboardView);
+    loadLeaderboard('boss-speed');
+  });
+
+  tabBossSpeed.addEventListener('click', () => {
+    setActiveTab(tabBossSpeed);
+    loadLeaderboard('boss-speed');
+  });
+
+  tabGoldAccum.addEventListener('click', () => {
+    setActiveTab(tabGoldAccum);
+    loadLeaderboard('gold-accum');
+  });
+
+  tabBossClear.addEventListener('click', () => {
+    setActiveTab(tabBossClear);
+    loadLeaderboard('boss-clear');
+  });
+
+  function setActiveTab(selectedTab) {
+    [tabBossSpeed, tabGoldAccum, tabBossClear].forEach(t => t.classList.remove('active'));
+    selectedTab.classList.add('active');
+  }
+
+  async function saveLeaderboardRecord(name, timeSec, currentGold, clears) {
+    const record = {
+      name,
+      timeSec,
+      gold: currentGold,
+      clears,
+      createdAt: new Date().toISOString()
+    };
+
+    // Save to LocalStorage fallback
+    let localRanks = JSON.parse(localStorage.getItem('vibe_ranks_boss') || '[]');
+    localRanks.push(record);
+    localRanks.sort((a, b) => a.timeSec - b.timeSec);
+    localRanks = localRanks.slice(0, 10);
+    localStorage.setItem('vibe_ranks_boss', JSON.stringify(localRanks));
+
+    // Save to Firestore if available
+    if (isFirebaseConfigured && db) {
+      try {
+        await addDoc(collection(db, "leaderboard_boss_speed"), {
+          ...record,
+          timestamp: serverTimestamp()
+        });
+      } catch (e) {
+        console.error("Firestore save error:", e);
+      }
+    }
+  }
+
+  async function syncUserData(uid) {
+    if (!isFirebaseConfigured || !db) return;
+    try {
+      const userRef = doc(db, "users", uid);
+      const docSnap = await getDoc(userRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.gold) {
+          gold = Math.max(gold, data.gold);
+          updateGoldUI();
+        }
+      } else {
+        await setDoc(userRef, { gold, bossClears, updatedAt: serverTimestamp() });
+      }
+    } catch (e) {
+      console.error("User sync error:", e);
+    }
+  }
+
+  async function loadLeaderboard(type) {
+    rankListEl.innerHTML = '<div style="text-align:center; padding:20px;">로딩 중...</div>';
+
+    let records = [];
+
+    if (type === 'boss-speed') {
+      // Local Fallback
+      records = JSON.parse(localStorage.getItem('vibe_ranks_boss') || '[]');
+
+      // Firestore load if enabled
+      if (isFirebaseConfigured && db) {
+        try {
+          const q = query(collection(db, "leaderboard_boss_speed"), orderBy("timeSec", "asc"), limit(10));
+          const snapshot = await getDocs(q);
+          if (!snapshot.empty) {
+            records = snapshot.docs.map(d => d.data());
+          }
+        } catch (e) {
+          console.warn("Firestore fallback to local:", e);
+        }
+      }
+    } else if (type === 'gold-accum') {
+      records = [
+        { name: userDisplayNameEl.textContent, gold: gold }
+      ];
+    } else {
+      records = [
+        { name: userDisplayNameEl.textContent, clears: bossClears }
+      ];
+    }
+
+    renderRankListUI(records, type);
+  }
+
+  function renderRankListUI(records, type) {
+    rankListEl.innerHTML = '';
+    if (records.length === 0) {
+      rankListEl.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">아직 기록이 없습니다. 도전해보세요!</div>';
+      return;
+    }
+
+    records.forEach((rec, idx) => {
+      const item = document.createElement('div');
+      item.className = `rank-item ${idx < 3 ? 'top3' : ''}`;
+
+      let valText = '';
+      if (type === 'boss-speed') valText = `⚡ ${rec.timeSec}초 (100% 정답)`;
+      else if (type === 'gold-accum') valText = `💰 ${rec.gold} Gold`;
+      else valText = `⚔️ ${rec.clears}회 클리어`;
+
+      item.innerHTML = `
+        <span class="rank-num">${idx + 1}위</span>
+        <span class="rank-name">${rec.name || '익명 탐험가'}</span>
+        <span class="rank-score">${valText}</span>
       `;
-
-      optionBtn.addEventListener('click', () => selectOption(optIndex));
-      optionsContainer.appendChild(optionBtn);
+      rankListEl.appendChild(item);
     });
-
-    // 다음/제출 버튼 비활성화
-    nextBtn.disabled = true;
-
-    if (currentQuestionIndex === totalQuestions - 1) {
-      nextBtnText.textContent = '최종 결과 보기';
-    } else {
-      nextBtnText.textContent = '다음 문제';
-    }
-  }
-
-  /**
-   * 4. 보기 선택 및 한 문제 풀 때 즉시 정답/오답 및 해설 출력
-   */
-  function selectOption(selectedOptIndex) {
-    if (isAnswered) return; // 이미 풀이한 경우 중복 선택 방지
-    isAnswered = true;
-
-    userAnswers[currentQuestionIndex] = selectedOptIndex;
-    const currentQ = quizData[currentQuestionIndex];
-    const isCorrect = selectedOptIndex === currentQ.answerIndex;
-
-    const optionBtns = optionsContainer.querySelectorAll('.option-btn');
-    optionBtns.forEach((btn, index) => {
-      btn.style.cursor = 'default';
-      if (index === currentQ.answerIndex) {
-        btn.classList.add('correct'); // 정답 보기는 초록색 강조
-      }
-      if (index === selectedOptIndex && !isCorrect) {
-        btn.classList.add('wrong'); // 틀린 경우 선택한 보기는 빨간색 강조
-      }
-    });
-
-    // 즉시 피드백 박스 렌더링
-    if (isCorrect) {
-      feedbackBox.className = 'feedback-box active correct';
-      feedbackHeader.innerHTML = '<span>⭕ 정답입니다! 훌륭해요.</span>';
-    } else {
-      feedbackBox.className = 'feedback-box active wrong';
-      feedbackHeader.innerHTML = `<span>❌ 아쉽네요! 정답은 ${currentQ.answerIndex + 1}번입니다.</span>`;
-    }
-
-    feedbackExp.innerHTML = `
-      <strong>💡 관용표현 [${currentQ.expression}] 해설:</strong><br>
-      ${currentQ.explanation}
-    `;
-
-    // 다음 문제 (또는 결과 보기) 버튼 활성화
-    nextBtn.disabled = false;
-  }
-
-  /**
-   * 5. 다음 문제 이동 또는 최종 제출
-   */
-  function handleNextQuestion() {
-    if (!isAnswered) return;
-
-    if (currentQuestionIndex < quizData.length - 1) {
-      currentQuestionIndex++;
-      renderQuestion();
-    } else {
-      submitQuiz();
-    }
-  }
-
-  /**
-   * 6. 퀴즈 제출 및 점수 계산 / 결과 렌더링
-   */
-  function submitQuiz() {
-    let correctCount = 0;
-
-    quizData.forEach((q, index) => {
-      if (userAnswers[index] === q.answerIndex) {
-        correctCount++;
-      }
-    });
-
-    const scorePerQuestion = 100 / quizData.length;
-    const finalScore = correctCount * scorePerQuestion;
-
-    // 결과 화면 전환
-    switchView(resultView);
-
-    // 점수 카운트업 애니메이션
-    animateScore(finalScore);
-
-    // 점수대별 메시지 설정
-    if (finalScore === 100) {
-      resultTitleEl.textContent = '🎉 완벽해요! 100점 만점!';
-      resultSubtitleEl.textContent = '초등학교 6학년 관용표현의 완벽한 달인이시군요!';
-    } else if (finalScore >= 80) {
-      resultTitleEl.textContent = '👏 대단해요! 뛰어난 실력!';
-      resultSubtitleEl.textContent = '관용표현의 의미를 아주 잘 이해하고 있어요.';
-    } else if (finalScore >= 60) {
-      resultTitleEl.textContent = '👍 좋은 시도예요!';
-      resultSubtitleEl.textContent = '틀린 문제를 오답노트로 복습하면 100점을 받을 수 있어요!';
-    } else {
-      resultTitleEl.textContent = '💪 힘내세요! 조금 더 연습해봐요!';
-      resultSubtitleEl.textContent = '아래 오답 노트를 보며 관용표현의 뜻을 배워보세요.';
-    }
-
-    // 풀이 결과 및 오답 노트 렌더링
-    renderReviewList();
-  }
-
-  /**
-   * 7. 점수 애니메이션
-   */
-  function animateScore(targetScore) {
-    let currentVal = 0;
-    const duration = 1000;
-    const stepTime = 20;
-    const increment = targetScore / (duration / stepTime);
-
-    const timer = setInterval(() => {
-      currentVal += increment;
-      if (currentVal >= targetScore) {
-        currentVal = targetScore;
-        clearInterval(timer);
-      }
-      finalScoreEl.textContent = Math.round(currentVal);
-    }, stepTime);
-  }
-
-  /**
-   * 8. 오답 노트 및 해설 리스트 렌더링
-   */
-  function renderReviewList() {
-    reviewListEl.innerHTML = '';
-
-    quizData.forEach((q, index) => {
-      const userSelected = userAnswers[index];
-      const isCorrect = userSelected === q.answerIndex;
-
-      const reviewItem = document.createElement('div');
-      reviewItem.className = `review-item ${isCorrect ? 'correct' : 'wrong'}`;
-
-      const userChoiceText = userSelected !== -1 ? q.options[userSelected] : '미선택';
-      const correctChoiceText = q.options[q.answerIndex];
-
-      reviewItem.innerHTML = `
-        <div class="review-item-header">
-          <span class="review-item-qnum">문제 ${index + 1}</span>
-          <span class="review-status-tag ${isCorrect ? 'correct' : 'wrong'}">
-            ${isCorrect ? '정답 ⭕' : '오답 ❌'}
-          </span>
-        </div>
-        <div class="review-question-text">${q.question}</div>
-        <div class="review-answers-box">
-          <div class="user-ans ${!isCorrect ? 'is-wrong' : ''}">
-            <strong>내가 선택한 답:</strong> ${userChoiceText}
-          </div>
-          ${!isCorrect ? `
-            <div class="correct-ans">
-              <strong>올바른 정답:</strong> ${correctChoiceText}
-            </div>
-          ` : ''}
-          <div class="exp-box">
-            <strong>💡 관용표현 [${q.expression}] 해설:</strong><br>
-            ${q.explanation}
-          </div>
-        </div>
-      `;
-
-      reviewListEl.appendChild(reviewItem);
-    });
-  }
-
-  /**
-   * 9. 다시 풀기 (메인으로 이동)
-   */
-  function restartQuiz() {
-    switchView(homeView);
   }
 });
