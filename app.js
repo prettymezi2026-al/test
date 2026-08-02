@@ -127,19 +127,40 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Gold & Boss Unlocking
+  // Gold & Boss Unlocking & Level EXP
   function updateGoldUI() {
     goldCountEl.textContent = gold;
     localStorage.setItem('vibe_gold', gold.toString());
     localStorage.setItem('vibe_boss_clears', bossClears.toString());
 
+    // Level & EXP Progress Calculation for 6th Graders
+    const levelTagEl = document.getElementById('user-level-tag');
+    const expBarFillEl = document.getElementById('exp-bar-fill');
+
+    let levelName = 'Lv.1 초보 탐험가';
+    let expPercent = Math.min(100, (gold / 100) * 100);
+
+    if (bossClears >= 5 || gold >= 300) {
+      levelName = 'Lv.4 👑 10 전설의 마스터';
+      expPercent = 100;
+    } else if (bossClears >= 2 || gold >= 200) {
+      levelName = 'Lv.3 ⚔️ 10 보스 사냥꾼';
+      expPercent = Math.min(100, ((gold - 200) / 100) * 100);
+    } else if (bossClears >= 1 || gold >= 100) {
+      levelName = 'Lv.2 🌟 10 숙련 탐험가';
+      expPercent = Math.min(100, ((gold - 100) / 100) * 100);
+    }
+
+    if (levelTagEl) levelTagEl.textContent = levelName;
+    if (expBarFillEl) expBarFillEl.style.width = `${expPercent}%`;
+
     if (gold >= 100) {
       bossCard.className = 'boss-card unlocked';
-      bossLockDesc.textContent = '도전 준비 완료! (10문제 타임어택)';
+      bossLockDesc.textContent = '던전 열림! ⚔️ (10문제 타임어택 도전 가능)';
       btnStartBoss.disabled = false;
     } else {
       bossCard.className = 'boss-card locked';
-      bossLockDesc.textContent = `도전 조건: 100 Gold 필요 (현재 ${gold}/100 Gold)`;
+      bossLockDesc.textContent = `도전 자격: 100 Gold 필요 (현재 ${gold}/100 Gold 🪙)`;
       btnStartBoss.disabled = true;
     }
   }

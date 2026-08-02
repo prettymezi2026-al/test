@@ -16,7 +16,15 @@
     <header class="auth-bar">
       <div class="user-profile-info">
         <span class="user-avatar" id="user-avatar">👦</span>
-        <span id="user-display-name">익명 탐험가</span>
+        <div class="user-meta-box">
+          <div class="user-name-title">
+            <span id="user-display-name">탐험가 초등 6</span>
+            <span class="user-lvl-tag" id="user-level-tag">Lv.1 초보</span>
+          </div>
+          <div class="exp-bar-bg">
+            <div id="exp-bar-fill" class="exp-bar-fill"></div>
+          </div>
+        </div>
         <div class="gold-badge">
           <span>💰</span>
           <span id="gold-count">0</span>
@@ -30,46 +38,59 @@
       </div>
     </header>
 
-    <!-- 1. LOBBY VIEW -->
+    <!-- 1. LOBBY VIEW (Quest & Arcade Theme) -->
     <section id="lobby-view" class="view-section active">
       <header class="lobby-header">
-        <h1 class="lobby-title">🏰 10 만들기 탐험대</h1>
-        <p class="lobby-subtitle">미니게임을 풀어 골드를 모으고 대마왕 보스에게 도전해보세요!</p>
+        <div class="hero-sub-badge">⚔️ 6학년 수학 퀘스트</div>
+        <h1 class="hero-banner-title">10 만들기 아케이드 탐험대</h1>
+        <p class="lobby-subtitle">스테이지를 클리어해 골드를 수집하고, 대마왕 던전에 도전하세요!</p>
       </header>
 
-      <!-- 3 Minigames Grid -->
+      <!-- 3 Minigames Quest Nodes -->
+      <div class="quest-stage-header">
+        <span>🎮 미니게임 퀘스트 스테이지</span>
+        <span style="font-size: 0.85rem; color: var(--text-muted);">골드 획득 가능</span>
+      </div>
+
       <div class="minigame-grid">
         <div class="game-card" id="card-game-1">
+          <div class="stage-num-tag">STAGE 01</div>
           <span class="game-icon">🫧</span>
-          <div class="game-card-title">10 짝꿍 버블 팝</div>
-          <div class="game-card-reward">+20 Gold</div>
+          <div class="game-card-title">짝꿍 버블 팝</div>
+          <div class="game-card-reward">+20 Gold 🪙</div>
         </div>
 
         <div class="game-card" id="card-game-2">
+          <div class="stage-num-tag">STAGE 02</div>
           <span class="game-icon">⚡</span>
-          <div class="game-card-title">10 스피드 타임</div>
-          <div class="game-card-reward">+30 Gold</div>
+          <div class="game-card-title">스피드 타임</div>
+          <div class="game-card-reward">+30 Gold 🪙</div>
         </div>
 
         <div class="game-card" id="card-game-3">
+          <div class="stage-num-tag">STAGE 03</div>
           <span class="game-icon">🧩</span>
           <div class="game-card-title">10 덧셈 블록</div>
-          <div class="game-card-reward">+30 Gold</div>
+          <div class="game-card-reward">+30 Gold 🪙</div>
         </div>
       </div>
 
-      <!-- Boss Raid Card -->
+      <!-- Boss Dungeon Gate Banner -->
       <div class="boss-card locked" id="boss-card">
-        <div>
-          <div class="boss-info-title">👹 최종 보스 대마왕 대결</div>
-          <div class="boss-info-desc" id="boss-lock-desc">도전 조건: 100 Gold 필요 (10문제 연속 타임어택)</div>
+        <div class="boss-card-left">
+          <span class="boss-icon-lg">👹</span>
+          <div>
+            <div class="boss-info-title">대마왕 던전 타임어택</div>
+            <div class="boss-info-desc" id="boss-lock-desc">도전 자격: 100 Gold 필요 (10문제 스피드 레이드)</div>
+          </div>
         </div>
-        <button id="btn-start-boss" class="btn-boss-start" disabled>보스 도전! ⚔️</button>
+        <button id="btn-start-boss" class="btn-boss-start" disabled>던전 입장 ⚔️</button>
       </div>
 
       <!-- Leaderboard Open Button -->
-      <button id="btn-open-leaderboard" class="btn-primary" style="background: var(--accent-charcoal);">
-        <span>🏆 명예의 전당 (Top 10) 보기</span>
+      <button id="btn-open-leaderboard" class="btn-primary" style="background: var(--accent-charcoal); padding: 18px;">
+        <span style="font-size: 1.2rem;">🏆</span>
+        <span>전교 명예의 전당 (Top 10) 랭킹 확인</span>
       </button>
     </section>
 
