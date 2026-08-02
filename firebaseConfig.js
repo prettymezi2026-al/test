@@ -1,7 +1,7 @@
 /**
  * Firebase Config & Auth / Firestore Integration for 「10 만들기 탐험대」
  * Firebase Web SDK v10 (Modular via CDN ES imports)
- * Secure Environment Variable Loader
+ * Connected to Firebase Project: literacy-85dee
  */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -27,16 +27,16 @@ import {
   serverTimestamp 
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-// 환경변수 안심 로더
+// 환경변수 안전 로더 (Vercel 배포 시 환경변수가 우선 적용되며, 없을 경우 연동 키로 기본 작동)
 const env = (window.__ENV__) || {};
 
 const firebaseConfig = {
-  apiKey: env.FIREBASE_API_KEY || "AIzaSyDemoKey_ReplaceWithYourFirebaseApiKey",
-  authDomain: env.FIREBASE_AUTH_DOMAIN || "test-10-making.firebaseapp.com",
-  projectId: env.FIREBASE_PROJECT_ID || "test-10-making",
-  storageBucket: env.FIREBASE_STORAGE_BUCKET || "test-10-making.appspot.com",
-  messagingSenderId: env.FIREBASE_MESSAGING_SENDER_ID || "1234567890",
-  appId: env.FIREBASE_APP_ID || "1:1234567890:web:abcdef123456"
+  apiKey: env.FIREBASE_API_KEY || "AIzaSyC94qvaSPPrWe9pTXvU2gbsLsBXYzBvAOM",
+  authDomain: env.FIREBASE_AUTH_DOMAIN || "literacy-85dee.firebaseapp.com",
+  projectId: env.FIREBASE_PROJECT_ID || "literacy-85dee",
+  storageBucket: env.FIREBASE_STORAGE_BUCKET || "literacy-85dee.firebasestorage.app",
+  messagingSenderId: env.FIREBASE_MESSAGING_SENDER_ID || "846434091220",
+  appId: env.FIREBASE_APP_ID || "1:846434091220:web:03819cb25ae89836017b41"
 };
 
 // Initialize Firebase
@@ -44,14 +44,11 @@ let app, auth, db;
 let isFirebaseConfigured = false;
 
 try {
-  if (env.FIREBASE_API_KEY && env.FIREBASE_API_KEY !== "YOUR_FIREBASE_API_KEY") {
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
-    isFirebaseConfigured = true;
-  } else {
-    console.log("Firebase config placeholder active. Running in secure LocalStorage mode.");
-  }
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+  isFirebaseConfigured = true;
+  console.log("Firebase 'literacy-85dee' initialized successfully!");
 } catch (e) {
   console.warn("Firebase initialization warning:", e);
 }
