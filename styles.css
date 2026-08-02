@@ -64,6 +64,27 @@ body {
   overflow: hidden;
 }
 
+/* View Sections Visibility - Only Active View is Visible */
+.view-section {
+  display: none !important;
+}
+
+.view-section.active {
+  display: block !important;
+  animation: pencilSlideIn 0.35s ease-out forwards;
+}
+
+@keyframes pencilSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Header Bar & Auth */
 .auth-bar {
   display: flex;
