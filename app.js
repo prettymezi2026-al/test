@@ -120,7 +120,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   btnBackButtons.forEach(btn => {
-    btn.addEventListener('click', () => switchView(lobbyView));
+    btn.addEventListener('click', () => {
+      if (speedTimerInterval) clearInterval(speedTimerInterval);
+      if (bossTimerInterval) clearInterval(bossTimerInterval);
+      switchView(lobbyView);
+    });
   });
 
   // Gold & Boss Unlocking
